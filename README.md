@@ -1,4 +1,4 @@
-# Telegram-Bot
+# Telegram-Downloader-Bot
 
 # Description:
 This program is specifically used to download media to the computer folder where this program is installed. It can be moidifed to save the media in specific folder which user wants to.
