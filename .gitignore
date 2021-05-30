@@ -8,6 +8,7 @@ userdata.py
 *.txt
 !functions.py
 !telegrambot.py
+!userdata-dummy.py
 !Test.bat
 !minute_start.txt
 !logger.txt

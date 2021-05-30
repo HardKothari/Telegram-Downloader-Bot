@@ -215,7 +215,7 @@ async def get_all_messages_date(client, chat_id, date, type, main_download_path 
         else:
             print("\nInside Actual loop and getting messages for non existing folders")
 
-            async for messages in client.iter_messages(chat_id, wait_time=2, min_id=id, reverse=False, filter=filter):
+            async for messages in client.iter_messages(chat_id, wait_time=2, filter=filter):
                 c = c + 1
                 all_messages.append({"sr": c, "message": messages})
                 # print(f'\nMessage: {messages}')
