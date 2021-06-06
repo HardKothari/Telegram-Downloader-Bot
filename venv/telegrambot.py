@@ -16,23 +16,31 @@ import sys, os, re
 logging.basicConfig(format='[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s',
                     level=logging.WARNING)
 
-#download path initialize
-main_download_path = 'D:/Telegram/'
-audio_download_path = 'D:\\Telegram\\Normal\\audio\\'
-video_downlad_path = 'D:\\Telegram\\Normal\\video\\'
-classic_downlad_path = 'D:\\Telegram\\Classic\\'
+# Initializing the download paths where program will download the media. Please use the path based on your computer directory wher
+# Generic Download Path. Below is the folder that will be used to download and create sub folders. This path can be edited as required.
+main_download_path = 'D:\\Telegram\\'
+# Download path for YoutTube Links as Audio
+# audio_download_path = 'D:\\Telegram\\Normal\\audio\\'
+# Download path for YoutTube Links as Video
+# video_downlad_path = 'D:\\Telegram\\Normal\\video\\'
+# Download path for Other Userdefined Downloads and Options
+# classic_downlad_path = 'D:\\Telegram\\Classic\\'
+
 #Intializing Client (Owner) and Bots
-client = TelegramClient(client_username, api_id, api_hash)
-test_bot = TelegramClient(test_bot_username, api_id, api_hash).start(bot_token=bot_test_api)
-downloader_bot = TelegramClient(downloader_bot_username, api_id, api_hash).start(bot_token=downloader_bot_api)
+client = TelegramClient(client_username, api_id, api_hash) # Client/User Initialize
+downloader_bot = TelegramClient(downloader_bot_username, api_id, api_hash).start(bot_token=downloader_bot_api) # Downloader Bot Initialize
+test_bot = TelegramClient(test_bot_username, api_id, api_hash).start(bot_token=bot_test_api) # Test Bot Initialize (Optional - 1)
+
+# Intiailizing arrays to store messages for downloading
 messages_array = []
 messages_downloader_bot_array = []
 
+# This can be used as main function. But currently its only used to log in console the chat in which new message arrives.
 async def main():
     await all_download_fn(event)
     pass
 
-#New Mesage Event for Client
+#New Mesage Event for Client. Any new message to client will trigger this event function
 @client.on(events.NewMessage())
 async def client_newmessage_handler(event):
     await message_details(event)
@@ -42,7 +50,7 @@ async def client_newmessage_handler(event):
         # await all_download_fn_new(event, client)
         pass
 
-#New message event for downloader bot
+#New Mesage Event for Downloader Bot. Any new message to downloader bot will trigger this event function
 @downloader_bot.on(events.NewMessage())
 async def downloader_bot_newmessage_handler(event):
     try:
@@ -90,7 +98,8 @@ async def downloader_bot_newmessage_handler(event):
         print(f'Error occured in Main code logic: {e.args} ')
         print("Error on line {}\n".format(sys.exc_info()[-1].tb_lineno))
 
-# Download Bot Button Callback
+
+# Downloader Bot Button Callback. Button callbacks response for downloader bot.
 @downloader_bot.on(events.CallbackQuery())
 async  def downloader_bot_callback_handler(event):
     print("Inside Download Bot - Button Callback!!")
@@ -117,7 +126,7 @@ async  def downloader_bot_callback_handler(event):
                    url = YouTube(str(link))
                    # print(f"URL: {url.title}")
                    title = re.sub('[^0-9a-zA-Z.]+', '_', url.title)# str(url.title).replace(" ","_").replace("|","").replace(",","").replace(".","").replace("★","")
-                   await youtube_Downloader(link, title)
+                   await youtube_Downloader(link, title, main_download_path)
                    await event.delete()
                    await downloader_bot.delete_messages(entity=None, message_ids=iter)
                    messages_downloader_bot_array.remove(iter)
@@ -136,7 +145,7 @@ async  def downloader_bot_callback_handler(event):
                    url = YouTube(str(link))
                    title = re.sub('[^0-9a-zA-Z.]+', '_', url.title)# str(url.title).replace(" ","_").replace("|","").replace(",","").replace(".","").replace("★","")
                    # print(f"Title: {title}")
-                   await youtube_Downloader(link, title, vid=False)
+                   await youtube_Downloader(link, title, main_download_path, vid=False)
                    await event.delete()
                    await downloader_bot.delete_messages(entity=None, message_ids=iter)
                    messages_downloader_bot_array.remove(iter)
@@ -247,17 +256,17 @@ async  def downloader_bot_callback_handler(event):
         print("Error on line {}\n".format(sys.exc_info()[-1].tb_lineno))
 
 
-# Button Callback
+# Button Callback for Test Bot. (Optional - 1)
 @test_bot.on(events.CallbackQuery())
 async  def test_bot_callback_handler(event):
     pass
 
-#test_bot New mesage event
+# New Message Event for Test Bot. (Optional - 1)
 @test_bot.on(events.NewMessage())
 async def test_bot_newmessage_handler(event):
     pass
 
-#Any album in Aliexpress Channels will forward the album to my AliExpress Channel
+# Any album in album_chat Channels/Groups will forward the album to my fowrward_chat Channel. (Optional - 2)
 @client.on(events.Album(chats=album_chats))
 async def client_album_handler(event):
     try:
@@ -272,7 +281,7 @@ async def client_album_handler(event):
         print("Error Generated in Aliexpress Album New Message Event!!")
         print(str(e))
 
-#Any message except album in Aliexpress Channels will forward the album to my AliExpress Channel
+# Any message in album_chat Channels/Groups will forward the album to my fowrward_chat Channel. (Optional - 2)
 @client.on(events.NewMessage(chats=album_chats))
 async def client_newmessage_handler(event):
     try:
