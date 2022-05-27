@@ -4,7 +4,13 @@ from telethon.tl.types import InputMessagesFilterPhotos, InputMessagesFilterVide
 import sys, os, re
 from pytube import YouTube
 import datetime
+import requests
 from userdata import album_chats
+from bs4 import BeautifulSoup
+from selenium import  webdriver
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions
 
 # Intialize this to test some functions or debugging the code. Don't touch it if you are not aware of the code below.
 trial=False
@@ -260,9 +266,11 @@ async def guided_download_fn(event, iter, download_path):
         file_name = iter.file.name if iter.file is not None else "NoFileName"
         type = identify_message(iter)
         print(f"\nStarting to download in hard_bot_downloader. File size: {float(iter.file.size) / 1000000} Mb")
-        helpers.ensure_parent_dir_exists(f'{download_path}{type}\\D{iter.date.strftime("%Y-%m-%dT%H_%M_%S")}_{file_name}')
+#        helpers.ensure_parent_dir_exists(f'{download_path}{type}\\D{iter.date.strftime("%Y-%m-%dT%H_%M_%S")}_{file_name}')
+        helpers.ensure_parent_dir_exists(f'{download_path}{type}\\{file_name}')
         # print(event)
-        path = await iter.download_media(f'{download_path}{type}\\D{iter.date.strftime("%Y-%m-%dT%H_%M_%S")}_{file_name}')
+#        path = await iter.download_media(f'{download_path}{type}\\D{iter.date.strftime("%Y-%m-%dT%H_%M_%S")}_{file_name}')
+        path = await iter.download_media(f'{download_path}{type}\\{file_name}')
         print('\nFile saved to', path)
 
     except errors.FloodWaitError as e:
@@ -280,6 +288,7 @@ async def guided_download_fn(event, iter, download_path):
 async def youtube_Downloader(link, title, download_path, vid=True):
     try:
         url =YouTube(str(link))
+        print(str(link))
         # video = url.streams.filter(is_dash=False).get_highest_resolution()  #url.streams.first()
         # video.download()
         print(url.streams.filter(is_dash=False).get_highest_resolution())
@@ -446,6 +455,64 @@ async def message_details(event):
     except Exception as e:
         print("Error Generated!!")
         print(str(e))
+
+
+# Direct Link Downloads
+async def direct_downloads_fn(url, download_path, filename = ""):
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.93 Safari/537.36'}
+        print(f"Downloading {url} started........")
+        if filename == "":
+            local_filename = url.split('/')[-1]
+        else:
+            local_filename = filename + "." + url.split('.')[-1]
+        # NOTE the stream=True parameter below
+        with requests.get(url, headers=headers, stream=True) as r:
+            r.raise_for_status()
+            with open(f"{download_path}Normal\\video\\{local_filename}", 'wb') as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    # If you have chunk encoded response uncomment if
+                    # and set chunk_size parameter to None.
+                    if chunk:
+                      f.write(chunk)
+        #return local_filename
+        print(f"Downloading {url} complete...")
+    except errors.FloodWaitError as e:
+        print('Have to sleep', e.seconds, 'seconds')
+        time.sleep(e.seconds)
+    except NameError as e:
+        print(f"Error Occured: {e}")
+    except Exception as e:
+        print("Error Generated in Downloader_Bot New Message Event!!")
+        print(f'Error occured in Main code logic: {e} ')
+        print(f'Error occured in Main code logic: {e.args} ')
+        print("Error on line {}\n".format(sys.exc_info()[-1].tb_lineno))
+
+
+# Direct All Link Downloads
+async def direct_links_downloads_fn(url, download_path, download_extensions, filename = ""):
+    try:
+        driver = webdriver.Edge(executable_path="C:/Hard - Data/Python/Python - Projects/Hard-Telegram-Bot/venv/msedgedriver.exe")
+        driver.get(url)
+        elements = WebDriverWait(driver, 10).until(expected_conditions.presence_of_all_elements_located((By.CLASS_NAME, 'list-group-item-action')))
+        html = driver.page_source
+        soup = BeautifulSoup(html, 'html.parser')
+        codex = 'https://codex.codexcloud.me'
+        driver.quit()
+        for link in soup.find_all('a', class_='list-group-item-action'):
+            link_local = f'{codex}{link.get("href")}'
+            # print(f'Title: {link.text} - Link:{codex}{link.get("href")}')
+            link_download = link_local.replace('?a=view', '')
+            #if 'mkv' in link_local:
+            if any(ext in link_local for ext in download_extensions):
+                await direct_downloads_fn(link_download, download_path)
+            # print(link1.replace('?a=view', ''))
+    except Exception as e:
+        print("Error Generated in direct_links_downloads_fn!!")
+        print(f'Error occured in Main code logic: {e} ')
+        print(f'Error occured in Main code logic: {e.args} ')
+        print("Error on line {}\n".format(sys.exc_info()[-1].tb_lineno))
 
 
 # =============================================== BELOW ARE THE FUNCTIONS NOT USED CURRENTLY AND PRESENT FOR TESTING ======================================================

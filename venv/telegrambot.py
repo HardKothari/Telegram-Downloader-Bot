@@ -8,9 +8,10 @@ from datetime import datetime, date, timezone, timedelta
 from FastTelethon import download_file, upload_file
 from pytube import YouTube
 from functions import identify_message, message_details, file_details, get_all_chats, get_all_messages, get_all_filters, get_all_messages_filter, guided_download_fn, all_download_fn, youtube_Downloader,\
-    all_download_fn_new, get_all_messages_date, download_all_messages_new
+    all_download_fn_new, get_all_messages_date, download_all_messages_new, direct_downloads_fn, direct_links_downloads_fn
 import ffmpeg
-from userdata import api_id, api_hash, bot_test_api, downloader_bot_api, client_username , downloader_bot_username, test_bot_username, forward_chat, album_chats,classic_keyboard_fn, classic_array
+from userdata import api_id, api_hash, bot_test_api, downloader_bot_api, client_username , downloader_bot_username, test_bot_username, forward_chat, album_chats,classic_keyboard_fn, classic_array,\
+    download_chats, codex_chat
 import sys, os, re
 #Enabling Logging
 logging.basicConfig(format='[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s',
@@ -30,6 +31,7 @@ main_download_path = 'D:\\Telegram\\'
 client = TelegramClient(client_username, api_id, api_hash) # Client/User Initialize
 downloader_bot = TelegramClient(downloader_bot_username, api_id, api_hash).start(bot_token=downloader_bot_api) # Downloader Bot Initialize
 test_bot = TelegramClient(test_bot_username, api_id, api_hash).start(bot_token=bot_test_api) # Test Bot Initialize (Optional - 1)
+download_extensions = [".mkv", ".mp4", ".avi", ".zip", ".tar", ".rar"]
 
 # Intiailizing arrays to store messages for downloading
 messages_array = []
@@ -54,6 +56,11 @@ async def client_newmessage_handler(event):
 @downloader_bot.on(events.NewMessage())
 async def downloader_bot_newmessage_handler(event):
     try:
+        # Below line of code is used to test code, can be commented in live run
+        #file_details(event.message)
+        #print(event.message)
+
+
         chat = await event.get_chat()
         sender = await event.get_sender()
         chat_id = event.chat_id
@@ -61,18 +68,33 @@ async def downloader_bot_newmessage_handler(event):
         sender_id = event.sender_id
         type = identify_message(event.message)
 
+
         # YouTube Keyboard
         YouTube_keyboard = [[Button.inline('Download as Video', data=f'YTVideo_{event.message.id}'),
                          Button.inline('Download as Audio', data=f'YTAudio_{event.message.id}')],
                         [Button.inline('DND', data=f'DND_{event.message.id}')]]
 
+        # Telegram Media Download Keyboard
         Download_Keyboard = [[Button.inline('Normal', data=f'Norm_{event.message.id}'), Button.inline('Classic', data=f'Class_{event.message.id}')],
                               [Button.inline('DND', data=f'DND_{event.message.id}')]]
+
+        # Codex Group External Link Download Keyboard
+        Download_Index_Keyboard = [[Button.inline('Yes', data=f'YDirect_{event.message.id}')],
+                              [Button.inline('DND', data=f'DND_{event.message.id}')]]
+
+        # Codex Group Multiple External Links Download Keyboard
+        Download_Index_Links_Keyboard = [[Button.inline('Yes', data=f'YDirectLinks_{event.message.id}')],
+                              [Button.inline('DND', data=f'DND_{event.message.id}')]]
+        
 
         if "/downloadall" in (event.message.message):
             # await all_download_fn(event, client)
             await all_download_fn_new(event, client)
 
+
+        if "/olddownloadall" in (event.message.message):
+            # await all_download_fn(event, client)
+            await all_download_fn(event, client)
         # If message is webpage and link is YouTube, then give an option to download as Audio or Video
         if type in ("webpage"):
             # print(event.message.message)
@@ -80,12 +102,33 @@ async def downloader_bot_newmessage_handler(event):
             messages_downloader_bot_array.append(event.message)
             if 'youtu' in url:
                 await event.reply("Test", buttons=YouTube_keyboard)
-
         # If message is media, then give an option to download as Normal or Classic
         if type in ("photo", "video", "contact", "audio", "document", "gif"):
             print("Inside Download Choose Function!!")
             messages_downloader_bot_array.append(event.message)
             await event.reply("Test", buttons=Download_Keyboard)
+
+
+        try:
+            # Below code block is only for codex messages from codex group
+            print(event.message.reply_markup.rows[0])
+            if 'Index' in event.message.reply_markup.rows[0].buttons[1].text:
+                index_download_url = event.message.reply_markup.rows[0].buttons[1].url
+            print("Inside Download Index link!!")
+            #download_extensions = [".mkv",".mp4",".avi",".zip",".tar",".rar"]
+            if any(ext in  index_download_url for ext in download_extensions):
+              messages_downloader_bot_array.append(event.message)
+              await event.reply("Donwload?", buttons=Download_Index_Keyboard)
+            else:
+                messages_downloader_bot_array.append(event.message)
+                await event.reply("Donwload all Links?", buttons=Download_Index_Links_Keyboard)
+        except:
+            if 'codexcloud.me' in str(event.message):
+                print(event.message.message)
+                print("Cloudx Link!!!!")
+                download_path = f"{main_download_path}"
+                await direct_links_downloads_fn(event.message.message, download_path, download_extensions)
+                await event.delete()
 
     except errors.FloodWaitError as e:
         print('Have to sleep', e.seconds, 'seconds')
@@ -161,6 +204,29 @@ async  def downloader_bot_callback_handler(event):
             for iter in messages_downloader_bot_array:
                 if str(iter.id) in str(event.query.data):
                     print(iter)
+                    await event.delete()
+                    await downloader_bot.delete_messages(entity=None, message_ids=iter)
+                    messages_downloader_bot_array.remove(iter)
+        elif 'YDirect_' in str(event.query.data):
+            for iter in messages_downloader_bot_array:
+                if str(iter.id) in str(event.query.data):
+                    print(iter)
+                    link = str(iter.reply_markup.rows[0].buttons[1].url)
+                    print(link)
+                    download_path = f"{main_download_path}"
+                    await direct_downloads_fn(link, download_path)
+                    await event.delete()
+                    await downloader_bot.delete_messages(entity=None, message_ids=iter)
+                    messages_downloader_bot_array.remove(iter)
+
+        elif 'YDirectLinks_' in str(event.query.data):
+            for iter in messages_downloader_bot_array:
+                if str(iter.id) in str(event.query.data):
+                    print(iter)
+                    link = str(iter.reply_markup.rows[0].buttons[1].url)
+                    print(link)
+                    download_path = f"{main_download_path}"
+                    await direct_links_downloads_fn(link, download_path, download_extensions)
                     await event.delete()
                     await downloader_bot.delete_messages(entity=None, message_ids=iter)
                     messages_downloader_bot_array.remove(iter)
@@ -291,6 +357,25 @@ async def client_newmessage_handler(event):
             await client.send_message(entity=forward_chat, message=event.message)
     except Exception as e:
         print("Error Generated in Aliexpress New Message Event!!")
+        print(str(e))
+
+
+# Any message in Channels/Groups will forward to my downloader BOT. (Optional - 2)
+@client.on(events.NewMessage(chats=download_chats))
+async def client_newmessage_handler(event):
+    try:
+        await client.send_message(entity=downloader_bot_username, message=event.message)
+    except Exception as e:
+        print("Error Generated in MK Archives New Message Event!!")
+        print(str(e))
+        
+# Any message in codex chat will forwarded to my downloader BOT. (Optional - 2)
+@client.on(events.NewMessage(chats=codex_chat))
+async def client_newmessage_handler(event):
+    try:
+        await client.send_message(entity=downloader_bot_username, message=event.message)
+    except Exception as e:
+        print("Error Generated in Codex Chat New Message Event!!")
         print(str(e))
 
 print('Telegram is staring ... !!!!')
