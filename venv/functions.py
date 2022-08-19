@@ -11,6 +11,7 @@ from selenium import  webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions
+from datetime import time
 
 # Intialize this to test some functions or debugging the code. Don't touch it if you are not aware of the code below.
 trial=False
@@ -76,15 +77,15 @@ async def get_all_messages(chat_id, minimum, maximum):
     c = 0
     all_messages = []
 
-    async for messages in client.iter_messages(chat_id, wait_time = 5):
-        c = c + 1
-        if c >= minimum and c <= maximum:
-            all_messages.append({"sr": c, "message": messages})
-        elif c < minimum:
-            pass
-        else:
-            break
-    return all_messages
+    # async for messages in client.iter_messages(chat_id, wait_time = 5):
+    #     c = c + 1
+    #     if c >= minimum and c <= maximum:
+    #         all_messages.append({"sr": c, "message": messages})
+    #     elif c < minimum:
+    #         pass
+    #     else:
+    #         break
+    # return all_messages
 
 
 # Get all messages from specific date
@@ -119,6 +120,7 @@ async def get_all_messages_date(client, chat_id, date, type, main_download_path 
             break
         y = y + 1
 
+
     with os.scandir(f"{main_download_path}") as it:
         for entry in it:
             # print(f'Directory: {entry.name}')
@@ -128,6 +130,7 @@ async def get_all_messages_date(client, chat_id, date, type, main_download_path 
                 with os.scandir(f"{main_download_path}{chat_id}_{chat_name}/") as ty:
                     for entry1 in ty:
                         # print(f'Type Directory: {entry1.name}')
+                        # Please change the logic here to ensure when allall files are selected ==========================================
                         if str(type) in entry1.name:
                             type_exist = True
                             with os.scandir(f"{main_download_path}{chat_id}_{chat_name}/{entry1.name}/") as fl:
@@ -254,23 +257,28 @@ async def download_all_messages_new(client,chat_id, all_messages, main_download_
         file_size = float(message["message"].file.size) / 1000000
 
         if file_size < 5:
-            helpers.ensure_parent_dir_exists(f'{main_download_path}{chat_id}_{chat_name}/{type}/D{message["message"].date.strftime("%Y-%m-%dT%H_%M_%S")}ID{chat_id}')
-            path = await message["message"].download_media(f'{main_download_path}{chat_id}_{chat_name}/{type}/D{message["message"].date.strftime("%Y-%m-%dT%H_%M_%S")}ID{chat_id}')
+            if type != 'allall':
+                helpers.ensure_parent_dir_exists(f'{main_download_path}{chat_id}_{chat_name}/{type}/D{message["message"].date.strftime("%Y-%m-%dT%H_%M_%S")}ID{chat_id}')
+                path = await message["message"].download_media(f'{main_download_path}{chat_id}_{chat_name}/{type}/D{message["message"].date.strftime("%Y-%m-%dT%H_%M_%S")}ID{chat_id}')
+            if type == 'allall':
+                type = identify_message(message)
+                helpers.ensure_parent_dir_exists(f'{main_download_path}{chat_id}_{chat_name}/{type}/D{message["message"].date.strftime("%Y-%m-%dT%H_%M_%S")}ID{chat_id}')
+                path = await message["message"].download_media(f'{main_download_path}{chat_id}_{chat_name}/{type}/D{message["message"].date.strftime("%Y-%m-%dT%H_%M_%S")}ID{chat_id}')
             if trial:
                 break
 
 
 # Function used to download the media in message by creating specific directory name and folder.
-async def guided_download_fn(event, iter, download_path):
+async def guided_download_fn(event, iter, download_path, client):
     try:
         file_name = iter.file.name if iter.file is not None else "NoFileName"
         type = identify_message(iter)
         print(f"\nStarting to download in hard_bot_downloader. File size: {float(iter.file.size) / 1000000} Mb")
 #        helpers.ensure_parent_dir_exists(f'{download_path}{type}\\D{iter.date.strftime("%Y-%m-%dT%H_%M_%S")}_{file_name}')
-        helpers.ensure_parent_dir_exists(f'{download_path}{type}\\{file_name}')
+        helpers.ensure_parent_dir_exists(f'{download_path}{type}/{file_name}')
         # print(event)
 #        path = await iter.download_media(f'{download_path}{type}\\D{iter.date.strftime("%Y-%m-%dT%H_%M_%S")}_{file_name}')
-        path = await iter.download_media(f'{download_path}{type}\\{file_name}')
+        path = await iter.download_media(f'{download_path}{type}/{file_name}')
         print('\nFile saved to', path)
 
     except errors.FloodWaitError as e:
@@ -279,9 +287,17 @@ async def guided_download_fn(event, iter, download_path):
     except NameError as e:
         print(f"Error Occured: {e}")
     except Exception as e:
-        print("Error Generated in guided_download_fn !!")
-        print(str(e))
-        print("\nError on line {}".format(sys.exc_info()[-1].tb_lineno))
+        try:
+            print("Downloading File in Chunk")
+            if "too large" in str(e):
+                with open(f'{download_path}{type}/{file_name}', 'wb') as fd:
+                    async for chunk in client.iter_download(iter.media):
+                        fd.write(chunk)
+                print('\nFile saved to', path)
+        except Exception as e:
+            print("Error Generated in guided_download_fn !!")
+            print(str(e))
+            print("\nError on line {}".format(sys.exc_info()[-1].tb_lineno))
 
 
 # Function specifically used to download media from youtube links
@@ -294,17 +310,17 @@ async def youtube_Downloader(link, title, download_path, vid=True):
         print(url.streams.filter(is_dash=False).get_highest_resolution())
         if vid:
             video = url.streams.filter(is_dash=False).get_highest_resolution()  # url.streams.first()
-            video.download(output_path=f"{download_path}Normal\\video\\", filename=title)
-            print(f'File saved to {download_path}Normal\\video\\{title}.mp4')
+            video.download(output_path=f"{download_path}Normal/video/", filename=title)
+            print(f'File saved to {download_path}Normal/video/{title}.mp4')
         else:
             audio = url.streams.filter(is_dash=False).get_lowest_resolution()  # url.streams.first()
             if audio is not None:
-                audio.download(output_path=f"{download_path}Normal\\audio\\", filename=title)
-                cmd = f'ffmpeg -i {download_path}Normal\\audio\\{title}.mp4 {download_path}Normal\\audio\\{title}.mp3'
-                cmd2 = f'{download_path}Normal\\audio\\{title}.mp4'
+                audio.download(output_path=f"{download_path}Normal/audio/", filename=title)
+                cmd = f'ffmpeg -i {download_path}Normal/audio/{title}.mp4 {download_path}Normal/audio/{title}.mp3'
+                cmd2 = f'{download_path}Normal/audio/{title}.mp4'
                 os.system(cmd)
                 os.remove(cmd2)
-                print(f'File saved to {download_path}Normal\\video\\{title}.mp3')
+                print(f'File saved to {download_path}Normal/video/{title}.mp3')
             else:
                 print("No Audio there to download!!")
     except Exception as e:
@@ -325,16 +341,33 @@ async def all_download_fn_new(event, client):
     # Getting all the chats for client
     chats = await get_all_chats(client)
     chats_keyboard = []
-   
+
+    print(chats)
+
+    # Logic to overcome limitation of max 100 buttons in a Keyboard
+    if len(chats) <= 100:
+        z = 1
+    else:
+        z = len(chats)//100 + 1
+
     y = 0
-    for i in chats:
-        # print(f'{chats[y]["sr"]}    :   {chats[y]["title"]}  -  {chats[y]["userid"]} - is_user: {chats[y]["is_user"]}')
-        # title = re.sub('[^0-9a-zA-Z.]+', '', chats[y]["title"])
-        # print(f'\nTitle: {title}')
-        chats_keyboard.append([Button.inline(f'{chats[y]["title"]}', data = f'{chats[y]["userid"]}|DOWNLOADALL')])
-        y = y + 1
-    print(chats_keyboard)
-    await event.reply("Select the chat!!", buttons=chats_keyboard)
+
+    for iter in range(1,z+1):
+        for i in chats:
+            # print(f'{chats[y]["sr"]}    :   {chats[y]["title"]}  -  {chats[y]["userid"]} - is_user: {chats[y]["is_user"]}')
+            # title = re.sub('[^0-9a-zA-Z.]+', '', chats[y]["title"])
+            # print(f'\nTitle: {title}')
+            chats_keyboard.append([Button.inline(f'{chats[y]["title"]}', data = f'{chats[y]["userid"]}|DOWNLOADALL')])
+            y = y + 1
+            if y == iter * 100 or y > len(chats)-1:
+                break
+
+        if y <= len(chats):
+            print(chats_keyboard)
+            await event.reply("Select the chat!!", buttons=chats_keyboard)
+            chats_keyboard = []
+        else:
+            break
 
 
 # Every new message detail for client
@@ -346,7 +379,11 @@ async def message_details(event):
         chat_username = event.chat.username
         sender_id = event.sender_id
         #await main()
-        print(f'You have a new message in "{chat_username}"')
+        print(f'You have a new message in "{chat_username}" : ChatdId: {chat_id} : SenderId: {sender_id}')
+
+        # For TEST
+        #print(event)
+        #print(event.message)
 
         if chat_username in album_chats:# or 1==1:
             type = identify_message(event.message)
@@ -470,7 +507,7 @@ async def direct_downloads_fn(url, download_path, filename = ""):
         # NOTE the stream=True parameter below
         with requests.get(url, headers=headers, stream=True) as r:
             r.raise_for_status()
-            with open(f"{download_path}Normal\\video\\{local_filename}", 'wb') as f:
+            with open(f"{download_path}Normal/video/{local_filename}", 'wb') as f:
                 for chunk in r.iter_content(chunk_size=8192):
                     # If you have chunk encoded response uncomment if
                     # and set chunk_size parameter to None.
@@ -570,7 +607,7 @@ async def download_messages(client, message, type, id=0, chat="Unknown"):
             #print(f'{identify_message(message)} - file Size: {file_size} Mb')
             #file_name = event.message.file.name if event.message.file is not None else "NoFileName"
 
-            download_path = "D:\Telegram\\"  # main_download_path #"O:/downloads/Telegram/"
+            download_path = "/Volumes/Hard 2TB/Telegram/" ##"D:\Telegram\\"  # main_download_path #"O:/downloads/Telegram/"
             if (message.contact or message.photo or message.video or message.geo ) and file_size < 200:
                 helpers.ensure_parent_dir_exists(f'{download_path}{id}_{chat}/{type}/D{message.date.strftime("%Y-%m-%dT%H_%M_%S")}ID{id}')
                 path = await message.download_media(f'{download_path}{id}_{chat}/{type}/D{message.date.strftime("%Y-%m-%dT%H_%M_%S")}ID{id}')

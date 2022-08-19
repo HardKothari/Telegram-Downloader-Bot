@@ -19,7 +19,8 @@ logging.basicConfig(format='[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s'
 
 # Initializing the download paths where program will download the media. Please use the path based on your computer directory wher
 # Generic Download Path. Below is the folder that will be used to download and create sub folders. This path can be edited as required.
-main_download_path = 'D:\\Telegram\\'
+# main_download_path = 'D:\\Telegram\\' ## Windows Path
+main_download_path = "/Volumes/Hard 2TB/Telegram/"  ##Mac OS Path
 # Download path for YoutTube Links as Audio
 # audio_download_path = 'D:\\Telegram\\Normal\\audio\\'
 # Download path for YoutTube Links as Video
@@ -39,7 +40,7 @@ messages_downloader_bot_array = []
 
 # This can be used as main function. But currently its only used to log in console the chat in which new message arrives.
 async def main():
-    await all_download_fn(event)
+    #await all_download_fn(event)
     pass
 
 #New Mesage Event for Client. Any new message to client will trigger this event function
@@ -236,7 +237,20 @@ async  def downloader_bot_callback_handler(event):
                 if str(iter.id) in str(event.query.data):
                     print(iter)
                     download_path = f"{main_download_path}Normal/"
-                    await guided_download_fn(event, iter, download_path)
+                    type = identify_message(iter)
+                    if (iter.file.size /  1000000) < 20480:
+                        await guided_download_fn(event, iter, download_path, downloader_bot)
+                    else:
+                        pass
+                        # print("Inside NORMAL Large file download Function")
+                        # print(iter)
+                        # print(iter.id)
+                        # msg = await client.get_messages('downloader_bot',ids=iter.id)
+                        # print(msg)
+                        # file_name = iter.media.document.attributes[1].file_name
+                        # with open(f'{download_path}{type}/{file_name}', 'wb') as fd:
+                        #     async for chunk in downloader_bot.iter_download(iter.media):
+                        #         fd.write(chunk)
                     await event.delete()
                     await downloader_bot.delete_messages(entity=None, message_ids=iter)
                     messages_downloader_bot_array.remove(iter)
@@ -256,7 +270,7 @@ async  def downloader_bot_callback_handler(event):
                 if str(iter.id) in str(event.query.data):
                     print(iter)
                     download_path = f"{main_download_path}Classic/{split}/"
-                    await guided_download_fn(event, iter, download_path)
+                    await guided_download_fn(event, iter, download_path, client)
                     await event.delete()
                     await downloader_bot.delete_messages(entity=None, message_ids=iter)
                     messages_downloader_bot_array.remove(iter)
@@ -276,7 +290,7 @@ async  def downloader_bot_callback_handler(event):
             # print(f'\n{date}')
             kb = [[Button.inline('Photos', data = f'{chatid}|allphoto'), Button.inline('Videos', data = f'{chatid}|allvideo')],
                   [Button.inline('Audio', data=f'{chatid}|allaudio'), Button.inline('Gifs', data=f'{chatid}|allgif')],
-                  [Button.inline('Documents', data=f'{chatid}|alldocument')]]
+                  [Button.inline('Documents', data=f'{chatid}|alldocument'), Button.inline('Everything', data=f'{chatid}|allall') ]]
             await downloader_bot.send_message(chat, "Select the type of data to download for chat!!", buttons=kb)
             # await get_all_messages_date(client, chatid , date, 'photovideo',main_download_path )
             await event.delete()
@@ -309,6 +323,14 @@ async  def downloader_bot_callback_handler(event):
             chatid = int(split[:-12])
             all_messages = await get_all_messages_date(client, chatid, date, 'document', main_download_path)
             await download_all_messages_new(client, chatid, all_messages, main_download_path, 'document')
+            await event.delete()
+        elif str(event.query.data)[-7:][:-1] == 'allall':
+            print(f'Callback: {str(event.query.data)[-12:][:-1]}')
+            chatid = int(split[:-12])
+            print("Getting all the messages!!")
+            all_messages = await get_all_messages_date(client, chatid, date, 'allall', main_download_path)
+            print("Downloading all the messages!!")
+            await download_all_messages_new(client, chatid, all_messages, main_download_path, 'allall')
             await event.delete()
         else:
             # Add the logic to warn the user with some warning/error
@@ -376,6 +398,26 @@ async def client_newmessage_handler(event):
         await client.send_message(entity=downloader_bot_username, message=event.message)
     except Exception as e:
         print("Error Generated in Codex Chat New Message Event!!")
+        print(str(e))
+
+# Any message in codex chat will forwarded to my downloader BOT. (Optional - 2)
+@client.on(events.NewMessage(chats="hard_test_bot"))
+async def client_newmessage_handler(event):
+    try:
+        pass
+        # print("In the TEST BOT Chat New Message Event!!")
+        # # await message_details(event)
+        # print(event.message.media)
+        # print(event.message.media.document.attributes[1].file_name)
+        # file_name = event.message.media.document.attributes[1].file_name
+        # # Streaming `media` to an output file
+        # # After the iteration ends, the sender is cleaned up
+        # with open(file_name, 'wb') as fd:
+        #     async for chunk in client.iter_download(event.message.media):
+        #         fd.write(chunk)
+
+    except Exception as e:
+        print("Error Generated in TEST BOT Chat New Message Event!!")
         print(str(e))
 
 print('Telegram is staring ... !!!!')
