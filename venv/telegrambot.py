@@ -1,3 +1,4 @@
+import datetime
 import logging
 from telethon import TelegramClient, events, sync, utils, functions, types, helpers, errors, Button
 from telethon.tl.types import InputMessagesFilterPhotos
@@ -7,12 +8,14 @@ import time
 from datetime import datetime, date, timezone, timedelta
 from FastTelethon import download_file, upload_file
 from pytube import YouTube
-from functions import identify_message, message_details, file_details, get_all_chats, get_all_messages, get_all_filters, get_all_messages_filter, guided_download_fn, all_download_fn, youtube_Downloader,\
-    all_download_fn_new, get_all_messages_date, download_all_messages_new, direct_downloads_fn, direct_links_downloads_fn
+from functions import identify_message, message_details, file_details, get_all_chats, get_all_messages_with_text, get_all_filters, get_all_messages_filter, guided_download_fn, all_download_fn, youtube_Downloader,\
+    all_download_fn_new, get_all_messages_date, download_all_messages_new, direct_downloads_fn, direct_links_downloads_fn, get_all_messages_with_text, get_all_chats_keyboard
 import ffmpeg
 from userdata import api_id, api_hash, bot_test_api, downloader_bot_api, client_username , downloader_bot_username, test_bot_username, forward_chat, album_chats,classic_keyboard_fn, classic_array,\
     download_chats, codex_chat
 import sys, os, re
+
+
 #Enabling Logging
 logging.basicConfig(format='[%(levelname) 5s/%(asctime)s] %(name)s: %(message)s',
                     level=logging.WARNING)
@@ -87,10 +90,43 @@ async def downloader_bot_newmessage_handler(event):
         Download_Index_Links_Keyboard = [[Button.inline('Yes', data=f'YDirectLinks_{event.message.id}')],
                               [Button.inline('DND', data=f'DND_{event.message.id}')]]
         
+        if "/getchatId" in (event.message.message):
+            print(event.message)
+            #textsearch = f"textsearch | {event.message.message[14:]}"
+            await get_all_chats_keyboard(event, client, callback_text = "getchatId")
+
+        if "/textsearch" in (event.message.message):
+            date = datetime.now()
+            msg = str(event.message.message)
+            chatid = int(msg.split(" ")[1])
+            text = msg.split(" ",2)[2]
+
+            print(f"Inside textsearch function with ChatId: {str(chatid)} and text: {text}")
+
+            all_messages = await get_all_messages_with_text(client,chat_id = str(chatid),text=text)
+            # all_messages = await get_all_messages_date(client, chatid, date, 'photo', main_download_path)
+            #print(all_messages)
+            for msg in all_messages:
+                try:
+                    message = msg["message"]
+                    print(msg["message"])
+                    # await client.send_message(entity=downloader_bot_username, message=message["message"])
+                    file_name = message.file.name if message.file is not None else "NoFileName"
+                    type = identify_message(message)
+
+                    path = await message.download_media(f'{main_download_path}Normal/{type}/{file_name}')
+                    print('\nFile saved to', path)
+
+                except Exception as e:
+                    print("Error Generated in TextSearch Message Send Event!!")
+                    print(str(e))
+
+
 
         if "/downloadall" in (event.message.message):
             # await all_download_fn(event, client)
-            await all_download_fn_new(event, client)
+            # await all_download_fn_new(event, client)
+            await get_all_chats_keyboard(event, client, callback_text="DOWNLOADALL")
 
 
         if "/olddownloadall" in (event.message.message):
@@ -103,6 +139,14 @@ async def downloader_bot_newmessage_handler(event):
             messages_downloader_bot_array.append(event.message)
             if 'youtu' in url:
                 await event.reply("Test", buttons=YouTube_keyboard)
+            elif any(ext in event.message.message for ext in download_extensions) and 'http' in url:
+                print(event.message.message)
+                print("Direct Download Link!!!!")
+                await event.reply("Donwloading the file now!!")
+                download_path = f"{main_download_path}"
+                await direct_links_downloads_fn(event.message.message, download_path, download_extensions)
+                await event.delete()
+
         # If message is media, then give an option to download as Normal or Classic
         if type in ("photo", "video", "contact", "audio", "document", "gif"):
             print("Inside Download Choose Function!!")
@@ -124,12 +168,15 @@ async def downloader_bot_newmessage_handler(event):
                 messages_downloader_bot_array.append(event.message)
                 await event.reply("Donwload all Links?", buttons=Download_Index_Links_Keyboard)
         except:
-            if 'codexcloud.me' in str(event.message):
-                print(event.message.message)
-                print("Cloudx Link!!!!")
-                download_path = f"{main_download_path}"
-                await direct_links_downloads_fn(event.message.message, download_path, download_extensions)
-                await event.delete()
+            try:
+                if 'codexcloud.me' in str(event.message):
+                    print(event.message.message)
+                    print("Cloudx Link!!!!")
+                    download_path = f"{main_download_path}"
+                    await direct_links_downloads_fn(event.message.message, download_path, download_extensions)
+                    await event.delete()
+            except:
+                print("Error in downloading direct link file...!!!")
 
     except errors.FloodWaitError as e:
         print('Have to sleep', e.seconds, 'seconds')
@@ -161,6 +208,23 @@ async  def downloader_bot_callback_handler(event):
 
     # Classic Keyboard - Defined based on personal userdata file
     classic_keyboard = await classic_keyboard_fn(event)
+
+    # Block to get the ID of a chat
+    try:
+        if "getchatId" in str(event.query.data):
+            chatid = int(split[:-10]) # -1001277402899
+            # chatid = int(split.split("|")[0])
+            # chatname = int(split.split("|")[1])
+            # print(f'\n{date}')
+            print(f'CallbackData: {event.query.data} | ChatId:{chatid}')
+            await downloader_bot.send_message(chat, str(chatid))
+            # await get_all_messages_date(client, chatid , date, 'photovideo',main_download_path )
+            await event.delete()
+    except Exception as e:
+        print("Inside getchatId Callback Option!!")
+        print(f'Error occured in Main code logic: {e} ')
+        print(f'Error occured in Main code logic: {e.args} ')
+        print("Error on line {}\n".format(sys.exc_info()[-1].tb_lineno))
 
     try:
         if "YTVideo_" in str(event.query.data):
@@ -288,6 +352,7 @@ async  def downloader_bot_callback_handler(event):
             # chatid = int(split.split("|")[0])
             # chatname = int(split.split("|")[1])
             # print(f'\n{date}')
+            print(f'CallbackData: {event.query.data} | ChatId:{chatid}')
             kb = [[Button.inline('Photos', data = f'{chatid}|allphoto'), Button.inline('Videos', data = f'{chatid}|allvideo')],
                   [Button.inline('Audio', data=f'{chatid}|allaudio'), Button.inline('Gifs', data=f'{chatid}|allgif')],
                   [Button.inline('Documents', data=f'{chatid}|alldocument'), Button.inline('Everything', data=f'{chatid}|allall') ]]
@@ -298,7 +363,9 @@ async  def downloader_bot_callback_handler(event):
             print(str(event.query.data)[-9:][:-1])
             chatid = int(split[:-9])
             all_messages = await get_all_messages_date(client, chatid, date, 'photo', main_download_path)
-            await download_all_messages_new(client, chatid, all_messages, main_download_path, 'photo')
+            print(chatid)
+            print(f"Total Messages: {len(all_messages)} in ChatId: {chatid}")
+            # await download_all_messages_new(client, chatid, all_messages, main_download_path, 'photo')
             await event.delete()
         elif str(event.query.data)[-9:][:-1] == 'allvideo':
             print(str(event.query.data)[-9:][:-1])
@@ -354,43 +421,43 @@ async  def test_bot_callback_handler(event):
 async def test_bot_newmessage_handler(event):
     pass
 
-# Any album in album_chat Channels/Groups will forward the album to my fowrward_chat Channel. (Optional - 2)
-@client.on(events.Album(chats=album_chats))
-async def client_album_handler(event):
-    try:
-        #print(event.grouped_id)
-        #print(f'I am into BOT Album event')
-        #print(f'Length of EVENT: {len(event)}')
-        #print("==========================")
-        #print(event.messages)
-        await client.send_file(entity=forward_chat, file=event.messages, caption=event.text)
-
-    except Exception as e:
-        print("Error Generated in Aliexpress Album New Message Event!!")
-        print(str(e))
-
-# Any message in album_chat Channels/Groups will forward the album to my fowrward_chat Channel. (Optional - 2)
-@client.on(events.NewMessage(chats=album_chats))
-async def client_newmessage_handler(event):
-    try:
-        if event.grouped_id:
-            pass
-        else:
-            await client.send_message(entity=forward_chat, message=event.message)
-    except Exception as e:
-        print("Error Generated in Aliexpress New Message Event!!")
-        print(str(e))
-
-
-# Any message in Channels/Groups will forward to my downloader BOT. (Optional - 2)
-@client.on(events.NewMessage(chats=download_chats))
-async def client_newmessage_handler(event):
-    try:
-        await client.send_message(entity=downloader_bot_username, message=event.message)
-    except Exception as e:
-        print("Error Generated in MK Archives New Message Event!!")
-        print(str(e))
-        
+# # Any album in album_chat Channels/Groups will forward the album to my fowrward_chat Channel. (Optional - 2)
+# @client.on(events.Album(chats=album_chats))
+# async def client_album_handler(event):
+#     try:
+#         #print(event.grouped_id)
+#         #print(f'I am into BOT Album event')
+#         #print(f'Length of EVENT: {len(event)}')
+#         #print("==========================")
+#         #print(event.messages)
+#         await client.send_file(entity=forward_chat, file=event.messages, caption=event.text)
+#
+#     except Exception as e:
+#         print("Error Generated in Aliexpress Album New Message Event!!")
+#         print(str(e))
+#
+# # Any message in album_chat Channels/Groups will forward the album to my fowrward_chat Channel. (Optional - 2)
+# @client.on(events.NewMessage(chats=album_chats))
+# async def client_newmessage_handler(event):
+#     try:
+#         if event.grouped_id:
+#             pass
+#         else:
+#             await client.send_message(entity=forward_chat, message=event.message)
+#     except Exception as e:
+#         print("Error Generated in Aliexpress New Message Event!!")
+#         print(str(e))
+#
+#
+# # Any message in Channels/Groups will forward to my downloader BOT. (Optional - 2)
+# @client.on(events.NewMessage(chats=download_chats))
+# async def client_newmessage_handler(event):
+#     try:
+#         await client.send_message(entity=downloader_bot_username, message=event.message)
+#     except Exception as e:
+#         print("Error Generated in MK Archives New Message Event!!")
+#         print(str(e))
+#
 # Any message in codex chat will forwarded to my downloader BOT. (Optional - 2)
 @client.on(events.NewMessage(chats=codex_chat))
 async def client_newmessage_handler(event):

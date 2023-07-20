@@ -16,6 +16,7 @@ from datetime import time
 # Intialize this to test some functions or debugging the code. Don't touch it if you are not aware of the code below.
 trial=False
 
+
 # identifying the type of message. Based on this identification folders are created in the download path.
 def identify_message(message):
     if str(message.media) == 'None':
@@ -67,167 +68,226 @@ async def get_all_chats(client):
     all_chats = []
     y = 0
     async for dialog in client.iter_dialogs():
-        all_chats.append({"sr": y + 1,"title": dialog.title, "userid": dialog.id, "is_user": dialog.is_user, "title": dialog.title})
+        #print(dialog)
+        #print(dialog.id)
+        all_chats.append({"sr": y + 1,"title": dialog.title, "userid": dialog.id, "is_user": dialog.is_user})
         y = y + 1
     return all_chats
 
+# List of all current chats with indexing
+async def get_all_chats_keyboard(event, client, callback_text):
+    chat = await event.get_chat()
+    sender = await event.get_sender()
+    chat_id = event.chat_id
+    chat_username = event.chat.username
+    sender_id = event.sender_id
 
-# list of all messages with indexing
-async def get_all_messages(chat_id, minimum, maximum):
-    c = 0
-    all_messages = []
+    # Getting all the chats for client
+    chats = await get_all_chats(client)
+    chats_keyboard = []
 
-    # async for messages in client.iter_messages(chat_id, wait_time = 5):
-    #     c = c + 1
-    #     if c >= minimum and c <= maximum:
-    #         all_messages.append({"sr": c, "message": messages})
-    #     elif c < minimum:
-    #         pass
-    #     else:
-    #         break
-    # return all_messages
+    print(chats)
+
+    # Logic to overcome limitation of max 100 buttons in a Keyboard
+    if len(chats) <= 100:
+        z = 1
+    else:
+        z = len(chats) // 100 + 1
+
+    y = 0
+
+    for iter in range(1, z + 1):
+        for i in chats:
+            # print(f'{chats[y]["sr"]}    :   {chats[y]["title"]}  -  {chats[y]["userid"]} - is_user: {chats[y]["is_user"]}')
+            # title = re.sub('[^0-9a-zA-Z.]+', '', chats[y]["title"])
+            # print(f'\nTitle: {title}')
+            chats_keyboard.append([Button.inline(f'{chats[y]["title"]}', data=f'{chats[y]["userid"]}|{callback_text}')])
+            y = y + 1
+            if y+1 == iter * 100 or y > len(chats) - 2:
+                break
+
+        chats_keyboard.append([Button.inline(f'Delete Callback', data=f'DND_{event.message.id}')])
+
+        if y <= len(chats)-1:
+            print(chats_keyboard)
+            await event.reply("Select the chat!!", buttons=chats_keyboard)
+            chats_keyboard = []
+        else:
+            break
+
+
+# list of all messages with WildCard Search
+async def get_all_messages_with_text(client,chat_id, text):
+    try:
+        c = 0
+        all_messages = []
+        print(f"ChatId: {chat_id} and {client}")
+        async for messages in client.iter_messages(entity=int(chat_id), wait_time=2, search=text):
+            c = c + 1
+            all_messages.append({"sr": c, "message": messages})
+            # print(f'\nMessage: {messages}')
+            # print(f'\n{messages.date.strftime("%Y-%m-%dT%H_%M_%S")}')
+        print(f"\nIf loop complete")
+        print(f"Total Messages to Download: {c} in ChatId: {chat_id}")
+
+        print(len(all_messages))
+        # for msg in all_messages:
+        #     print(msg["message"].message)
+        return all_messages
+    except Exception as e:
+        print("Error Generated in get_all_messages_with_text")
+        print(f'Error occured in Main code logic: {e} ')
+        print(f'Error occured in Main code logic: {e.args} ')
+        print("Error on line {}\n".format(sys.exc_info()[-1].tb_lineno))
 
 
 # Get all messages from specific date
 async def get_all_messages_date(client, chat_id, date, type, main_download_path ,trial = trial):
-    all_messages = []
-    c=0
-    if type == 'photo':
-        filter = InputMessagesFilterPhotos
-    elif type == 'video':
-        filter = InputMessagesFilterVideo
-    elif type == 'gif':
-        filter = InputMessagesFilterGif
-    elif type == 'audio':
-        filter = InputMessagesFilterMusic
-    elif type == 'document':
-        filter = InputMessagesFilterDocument
-    else:
-        filter = InputMessagesFilterPhotoVideo
-
-    directory_exist = False
-    type_exist = False
-    files_exist = False
-    all_files = []
-    chat_name = ""
-
-    i = await get_all_chats(client)
-    y = 0
-    for iter in i:
-        # print(f'Iteration: {i[y]["userid"]} - {chat_id}')
-        if str(i[y]["userid"]) == str(chat_id):
-            chat_name = i[y]["title"]
-            break
-        y = y + 1
-
-
-    with os.scandir(f"{main_download_path}") as it:
-        for entry in it:
-            # print(f'Directory: {entry.name}')
-            if str(chat_id) in entry.name:
-                directory_exist = True
-                os.rename(f'{main_download_path}{entry.name}', f'{main_download_path}{chat_id}_{chat_name}')
-                with os.scandir(f"{main_download_path}{chat_id}_{chat_name}/") as ty:
-                    for entry1 in ty:
-                        # print(f'Type Directory: {entry1.name}')
-                        # Please change the logic here to ensure when allall files are selected ==========================================
-                        if str(type) in entry1.name:
-                            type_exist = True
-                            with os.scandir(f"{main_download_path}{chat_id}_{chat_name}/{entry1.name}/") as fl:
-                                for entry2 in fl:
-                                    # print(f'FileName: {entry2.name}')
-                                    if 'D' == str(entry2.name)[0:1] and 'ID' in str(entry2.name) :
-                                        all_files.append(entry2.name)
-                            if all_files != []:
-                                print("\n EXISTING DIRECTORY AND FILES!!!")
-                                all_files.sort(reverse=True)
-                                last_file = all_files[0]
-                                print(f"All Files: {all_files[0]}")
-                                date = datetime.datetime(int(last_file[1:5]), int(last_file[6:8]), int(last_file[9:11]),
-                                                         int(last_file[12:14]), int(last_file[15:17]),
-                                                         int(last_file[18:20]))
-                                print(f"Date of Last File: {date}")
-                                files_exist = True
-                            else:
-                                files_exist = False
-                            break
-
-    if directory_exist and type_exist and files_exist == False:
-        pass
-    elif directory_exist and type_exist == False and files_exist == False:
-        # i = await get_all_chats(client)
-        # # print("Inside create Directory!!!")
-        # y = 0
-        # for iter in i:
-        #     # print(f'Iteration: {i[y]["userid"]} - {chat_id}')
-        #     if str(i[y]["userid"]) == str(chat_id):
-        #         helpers.ensure_parent_dir_exists(f'{main_download_path}{chat_id}_{i[y]["title"]}/{type}/')
-        #         break
-        #     y = y + 1
-        helpers.ensure_parent_dir_exists(f'{main_download_path}{chat_id}_{chat_name}/{type}/')
-    elif directory_exist == False and type_exist == False and files_exist == False:
-        # i = await get_all_chats(client)
-        # print("Inside create Directory!!!")
-        # y = 0
-        # for iter in i:
-        #     print(f'Iteration: {i[y]["userid"]} - {chat_id}')
-        #     if str(i[y]["userid"]) == str(chat_id):
-        #         helpers.ensure_parent_dir_exists(f'{main_download_path}{chat_id}_{i[y]["title"]}/{type}/')
-        #         break
-        #     y = y + 1
-        helpers.ensure_parent_dir_exists(f'{main_download_path}{chat_id}_{chat_name}/{type}/')
-
-    if files_exist:
-        print(f"\nInside get messages: filter is {filter}")
-
-        if trial == True:
-            print("\nInside Trial IF loop and getting messages")
-            id = 0
-            async for messages in client.iter_messages(chat_id, offset_date=date, reverse=False, limit=1):
-                id = messages.id
-                print(f'ID = {id}')
-            async for messages in client.iter_messages(chat_id, wait_time=2, min_id=id, reverse=False, filter=filter):
-                c = c + 1
-                all_messages.append({"sr": c, "message": messages})
-                # print(f'\nMessage: {messages}')
-                # print(f'\n{messages.date.strftime("%Y-%m-%dT%H_%M_%S")}')
-            print(f"\nIf loop complete")
-            print(f"Total Messages to Download: {c}")
+    try:
+        print(f"------Inside get_all_messages_date: ChatId: {chat_id}")
+        all_messages = []
+        c=0
+        if type == 'photo':
+            filter = InputMessagesFilterPhotos
+        elif type == 'video':
+            filter = InputMessagesFilterVideo
+        elif type == 'gif':
+            filter = InputMessagesFilterGif
+        elif type == 'audio':
+            filter = InputMessagesFilterMusic
+        elif type == 'document':
+            filter = InputMessagesFilterDocument
         else:
-            print("\nInside Actual loop and getting messages for exisitng files and folder")
-            id = 0
-            async for messages in client.iter_messages(chat_id, offset_date=date, reverse=False, limit=1):
-                id = messages.id
-                print(f'ID = {id}')
-            async for messages in client.iter_messages(chat_id, wait_time=2, min_id=id, reverse=False, filter=filter):
-                c = c + 1
-                all_messages.append({"sr": c, "message": messages})
-                # print(f'\nMessage: {messages}')
-                # print(f'\n{messages.date.strftime("%Y-%m-%dT%H_%M_%S")}')
-            print(f"\nIf loop complete")
-            print(f"Total Messages to Download: {c}")
-    else:
-        if trial == True:
-            print("\nInside Trial IF loop and getting messages for non existing folders")
-            async for messages in client.iter_messages(chat_id, wait_time=2, filter=filter):
-                c = c + 1
-                all_messages.append({"sr": c, "message": messages})
-                # print(f'\nMessage: {messages}')
-                # print(f'\n{messages.date.strftime("%Y-%m-%dT%H_%M_%S")}')
-            print(f"\nIf loop complete")
-            print(f"Total Messages to Download: {c}")
+            filter = InputMessagesFilterPhotoVideo
+
+        directory_exist = False
+        type_exist = False
+        files_exist = False
+        all_files = []
+        chat_name = ""
+
+        i = await get_all_chats(client)
+        y = 0
+        for iter in i:
+            # print(f'Iteration: {i[y]["userid"]} - {chat_id}')
+            if str(i[y]["userid"]) == str(chat_id):
+                chat_name = i[y]["title"]
+                break
+            y = y + 1
+
+
+        with os.scandir(f"{main_download_path}") as it:
+            for entry in it:
+                # print(f'Directory: {entry.name}')
+                if str(chat_id) in entry.name:
+                    directory_exist = True
+                    os.rename(f'{main_download_path}{entry.name}', f'{main_download_path}{chat_id}_{chat_name}')
+                    with os.scandir(f"{main_download_path}{chat_id}_{chat_name}/") as ty:
+                        for entry1 in ty:
+                            # print(f'Type Directory: {entry1.name}')
+                            # Please change the logic here to ensure when allall files are selected ==========================================
+                            if str(type) in entry1.name:
+                                type_exist = True
+                                with os.scandir(f"{main_download_path}{chat_id}_{chat_name}/{entry1.name}/") as fl:
+                                    for entry2 in fl:
+                                        # print(f'FileName: {entry2.name}')
+                                        if 'D' == str(entry2.name)[0:1] and 'ID' in str(entry2.name) :
+                                            all_files.append(entry2.name)
+                                if all_files != []:
+                                    print("\n EXISTING DIRECTORY AND FILES!!!")
+                                    all_files.sort(reverse=True)
+                                    last_file = all_files[0]
+                                    print(f"All Files: {all_files[0]}")
+                                    date = datetime.datetime(int(last_file[1:5]), int(last_file[6:8]), int(last_file[9:11]),
+                                                             int(last_file[12:14]), int(last_file[15:17]),
+                                                             int(last_file[18:20]))
+                                    print(f"Date of Last File: {date}")
+                                    files_exist = True
+                                else:
+                                    files_exist = False
+                                break
+
+        if directory_exist and type_exist and files_exist == False:
+            pass
+        elif directory_exist and type_exist == False and files_exist == False:
+            # i = await get_all_chats(client)
+            # # print("Inside create Directory!!!")
+            # y = 0
+            # for iter in i:
+            #     # print(f'Iteration: {i[y]["userid"]} - {chat_id}')
+            #     if str(i[y]["userid"]) == str(chat_id):
+            #         helpers.ensure_parent_dir_exists(f'{main_download_path}{chat_id}_{i[y]["title"]}/{type}/')
+            #         break
+            #     y = y + 1
+            helpers.ensure_parent_dir_exists(f'{main_download_path}{chat_id}_{chat_name}/{type}/')
+        elif directory_exist == False and type_exist == False and files_exist == False:
+            # i = await get_all_chats(client)
+            # print("Inside create Directory!!!")
+            # y = 0
+            # for iter in i:
+            #     print(f'Iteration: {i[y]["userid"]} - {chat_id}')
+            #     if str(i[y]["userid"]) == str(chat_id):
+            #         helpers.ensure_parent_dir_exists(f'{main_download_path}{chat_id}_{i[y]["title"]}/{type}/')
+            #         break
+            #     y = y + 1
+            helpers.ensure_parent_dir_exists(f'{main_download_path}{chat_id}_{chat_name}/{type}/')
+
+        if files_exist:
+            print(f"\nInside get messages: filter is {filter}")
+
+            if trial == True:
+                print("\nInside Trial IF loop and getting messages")
+                id = 0
+                async for messages in client.iter_messages(chat_id, offset_date=date, reverse=False, limit=1):
+                    id = messages.id
+                    print(f'ID = {id}')
+                async for messages in client.iter_messages(chat_id, wait_time=2, min_id=id, reverse=False, filter=filter):
+                    c = c + 1
+                    all_messages.append({"sr": c, "message": messages})
+                    # print(f'\nMessage: {messages}')
+                    # print(f'\n{messages.date.strftime("%Y-%m-%dT%H_%M_%S")}')
+                print(f"\nIf loop complete")
+                print(f"Total Messages to Download: {c}")
+            else:
+                print("\nInside Actual loop and getting messages for exisitng files and folder")
+                id = 0
+                async for messages in client.iter_messages(chat_id, offset_date=date, reverse=False, limit=1):
+                    id = messages.id
+                    print(f'ID = {id}')
+                async for messages in client.iter_messages(chat_id, wait_time=2, min_id=id, reverse=False, filter=filter):
+                    c = c + 1
+                    all_messages.append({"sr": c, "message": messages})
+                    # print(f'\nMessage: {messages}')
+                    # print(f'\n{messages.date.strftime("%Y-%m-%dT%H_%M_%S")}')
+                print(f"\nIf loop complete")
+                print(f"Total Messages to Download: {c}")
         else:
-            print("\nInside Actual loop and getting messages for non existing folders")
+            if trial == True:
+                print("\nInside Trial IF loop and getting messages for non existing folders")
+                async for messages in client.iter_messages(chat_id, wait_time=2, filter=filter):
+                    c = c + 1
+                    all_messages.append({"sr": c, "message": messages})
+                    # print(f'\nMessage: {messages}')
+                    # print(f'\n{messages.date.strftime("%Y-%m-%dT%H_%M_%S")}')
+                print(f"\nIf loop complete")
+                print(f"Total Messages to Download: {c}")
+            else:
+                print("\nInside Actual loop and getting messages for non existing folders")
 
-            async for messages in client.iter_messages(chat_id, wait_time=2, filter=filter):
-                c = c + 1
-                all_messages.append({"sr": c, "message": messages})
-                # print(f'\nMessage: {messages}')
-                # print(f'\n{messages.date.strftime("%Y-%m-%dT%H_%M_%S")}')
-            print(f"\nIf loop complete")
-            print(f"Total Messages to Download: {c}")
+                async for messages in client.iter_messages(chat_id, wait_time=2, filter=filter):
+                    c = c + 1
+                    all_messages.append({"sr": c, "message": messages})
+                    # print(f'\nMessage: {messages}')
+                    # print(f'\n{messages.date.strftime("%Y-%m-%dT%H_%M_%S")}')
+                print(f"\nIf loop complete")
+                print(f"Total Messages to Download: {c} in ChatId: {chat_id}")
 
-    return all_messages
+        return all_messages
+    except Exception as e:
+        print("Error Generated in Downloader_Bot New Message Event!!")
+        print(f'Error occured in Main code logic: {e} ')
+        print(f'Error occured in Main code logic: {e.args} ')
+        print("Error on line {}\n".format(sys.exc_info()[-1].tb_lineno))
 
 
 # Definition used to download all media from any given chat/group/channel.
@@ -330,54 +390,62 @@ async def youtube_Downloader(link, title, download_path, vid=True):
         print("Error on line {}".format(sys.exc_info()[-1].tb_lineno))
 
 
-# Initial Function used to download all media from a given caht.
+# Initial Function used to download all media from a given chat.
 async def all_download_fn_new(event, client):
-    chat = await event.get_chat()
-    sender = await event.get_sender()
-    chat_id = event.chat_id
-    chat_username = event.chat.username
-    sender_id = event.sender_id
+    await get_all_chats_keyboard(event,client, callback_text="DOWNLOADALL")
 
-    # Getting all the chats for client
-    chats = await get_all_chats(client)
-    chats_keyboard = []
-
-    print(chats)
-
-    # Logic to overcome limitation of max 100 buttons in a Keyboard
-    if len(chats) <= 100:
-        z = 1
-    else:
-        z = len(chats)//100 + 1
-
-    y = 0
-
-    for iter in range(1,z+1):
-        for i in chats:
-            # print(f'{chats[y]["sr"]}    :   {chats[y]["title"]}  -  {chats[y]["userid"]} - is_user: {chats[y]["is_user"]}')
-            # title = re.sub('[^0-9a-zA-Z.]+', '', chats[y]["title"])
-            # print(f'\nTitle: {title}')
-            chats_keyboard.append([Button.inline(f'{chats[y]["title"]}', data = f'{chats[y]["userid"]}|DOWNLOADALL')])
-            y = y + 1
-            if y == iter * 100 or y > len(chats)-1:
-                break
-
-        if y <= len(chats):
-            print(chats_keyboard)
-            await event.reply("Select the chat!!", buttons=chats_keyboard)
-            chats_keyboard = []
-        else:
-            break
+    # chat = await event.get_chat()
+    # sender = await event.get_sender()
+    # chat_id = event.chat_id
+    # chat_username = event.chat.username
+    # sender_id = event.sender_id
+    #
+    # # Getting all the chats for client
+    # chats = await get_all_chats(client)
+    # chats_keyboard = []
+    #
+    # print(chats)
+    #
+    # # Logic to overcome limitation of max 100 buttons in a Keyboard
+    # if len(chats) <= 100:
+    #     z = 1
+    # else:
+    #     z = len(chats)//100 + 1
+    #
+    # y = 0
+    #
+    # for iter in range(1,z+1):
+    #     for i in chats:
+    #         # print(f'{chats[y]["sr"]}    :   {chats[y]["title"]}  -  {chats[y]["userid"]} - is_user: {chats[y]["is_user"]}')
+    #         # title = re.sub('[^0-9a-zA-Z.]+', '', chats[y]["title"])
+    #         # print(f'\nTitle: {title}')
+    #         chats_keyboard.append([Button.inline(f'{chats[y]["title"]}', data = f'{chats[y]["userid"]}|DOWNLOADALL')])
+    #         y = y + 1
+    #         if y == iter * 100 or y > len(chats)-1:
+    #             break
+    #
+    #     if y <= len(chats):
+    #         print(chats_keyboard)
+    #         await event.reply("Select the chat!!", buttons=chats_keyboard)
+    #         chats_keyboard = []
+    #     else:
+    #         break
 
 
 # Every new message detail for client
 async def message_details(event):
     try:
+
         chat = await event.get_chat()
         sender = await event.get_sender()
         chat_id = event.chat_id
-        chat_username = event.chat.username
+        #print(event.chat)
+        try:
+            chat_username = "Username: " + event.chat.username
+        except:
+            chat_username = "Title: " + event.chat.title
         sender_id = event.sender_id
+
         #await main()
         print(f'You have a new message in "{chat_username}" : ChatdId: {chat_id} : SenderId: {sender_id}')
 
